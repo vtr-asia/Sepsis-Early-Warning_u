@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMART on FHIR Launch - 敗血症監控系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            background: #0a0e1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 背景動態網格 */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(118, 75, 162, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(118, 75, 162, 0.08) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: gridMove 20s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(40px); }
+        }
+
+        /* 背景光暈 */
+        .bg-glow {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+        }
+        .bg-glow-1 {
+            width: 400px; height: 400px;
+            background: rgba(118, 75, 162, 0.25);
+            top: -100px; left: -100px;
+            animation: floatGlow 8s ease-in-out infinite;
+        }
+        .bg-glow-2 {
+            width: 300px; height: 300px;
+            background: rgba(102, 126, 234, 0.2);
+            bottom: -80px; right: -80px;
+            animation: floatGlow 10s ease-in-out infinite reverse;
+        }
+        @keyframes floatGlow {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(20px, 20px) scale(1.1); }
+        }
+
+        .card {
+            position: relative;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(24px);
+            padding: 52px 48px;
+            border-radius: 24px;
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+            box-shadow:
+                0 0 0 1px rgba(118, 75, 162, 0.3),
+                0 32px 80px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .icon-wrap {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 28px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #764ba2, #667eea);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 8px 32px rgba(118, 75, 162, 0.5);
+        }
+
+        h2 {
+            color: #f0f0f0;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: 0.02em;
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.45);
+            font-size: 13px;
+            margin-bottom: 40px;
+            letter-spacing: 0.03em;
+        }
+
+        /* 進度條 */
+        .progress-bar-wrap {
+            background: rgba(255,255,255,0.07);
+            border-radius: 99px;
+            height: 4px;
+            margin-bottom: 28px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #764ba2, #667eea, #a78bfa);
+            border-radius: 99px;
+            width: 0%;
+            animation: progressFill 3s ease-out forwards;
+        }
+        @keyframes progressFill {
+            0%   { width: 0%; }
+            40%  { width: 55%; }
+            70%  { width: 75%; }
+            95%  { width: 90%; }
+            100% { width: 100%; }
+        }
+
+        /* 步驟列表 */
+        .steps {
+            list-style: none;
+            text-align: left;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            font-size: 13px;
+            color: rgba(255,255,255,0.4);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: color 0.4s ease;
+        }
+        .step:last-child { border-bottom: none; }
+        .step.active { color: rgba(255,255,255,0.85); }
+        .step.done { color: rgba(103, 232, 149, 0.9); }
+
+        .step-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 10px;
+            transition: all 0.4s ease;
+        }
+        .step.active .step-dot {
+            border-color: #a78bfa;
+            background: rgba(118, 75, 162, 0.3);
+            animation: stepPulse 1.5s ease-in-out infinite;
+        }
+        .step.done .step-dot {
+            border-color: #67e895;
+            background: rgba(103, 232, 149, 0.2);
+        }
+        @keyframes stepPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4); }
+            50% { box-shadow: 0 0 0 5px rgba(167, 139, 250, 0); }
+        }
+
+        /* 錯誤狀態 */
+        .error-box {
+            display: none;
+            background: rgba(220, 53, 69, 0.12);
+            border: 1px solid rgba(220, 53, 69, 0.35);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-top: 24px;
+            color: #ff8080;
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: left;
+        }
+
+        .btn-retry {
+            display: none;
+            width: 100%;
+            margin-top: 16px;
+            padding: 12px;
+            border: 1px solid rgba(118, 75, 162, 0.5);
+            border-radius: 10px;
+            background: rgba(118, 75, 162, 0.15);
+            color: #c4aaff;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-retry:hover {
+            background: rgba(118, 75, 162, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .version-badge {
+            margin-top: 28px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.2);
+            letter-spacing: 0.08em;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <div class="card">
+        <div class="icon-wrap">🚨</div>
+        <h2>敗血症早期監控系統</h2>
+        <p class="subtitle">SMART on FHIR · 衛福部 THAS 安全驗證</p>
+
+        <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+
+        <ul class="steps">
+            <li class="step active" id="step1">
+                <div class="step-dot" id="dot1">→</div>
+                <span>連線至 THAS FHIR 伺服器</span>
+            </li>
+            <li class="step" id="step2">
+                <div class="step-dot" id="dot2">→</div>
+                <span>請求 OAuth 2.0 授權範圍</span>
+            </li>
+            <li class="step" id="step3">
+                <div class="step-dot" id="dot3">→</div>
+                <span>跳轉至授權頁面...</span>
+            </li>
+        </ul>
+
+        <div class="error-box" id="errorBox"></div>
+        <button class="btn-retry" id="retryBtn" onclick="doAuthorize()">🔄 重新嘗試授權</button>
+
+        <p class="version-badge">FHIR R4 · SMART on FHIR v2</p>
+    </div>
+
+    <script>
+        function setStepDone(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('active');
+            el.classList.add('done');
+            el.querySelector('.step-dot').textContent = '✓';
+        }
+        function setStepActive(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function showError(msg) {
+            const box = document.getElementById('errorBox');
+            const btn = document.getElementById('retryBtn');
+            box.style.display = 'block';
+            btn.style.display = 'block';
+            box.innerHTML = `<strong>⚠️ 授權失敗</strong><br>${msg}`;
+            document.getElementById('progressBar').style.animation = 'none';
+            document.getElementById('progressBar').style.background = 'rgba(220,53,69,0.5)';
+        }
+
+        async function doAuthorize() {
+            document.getElementById('errorBox').style.display = 'none';
+            document.getElementById('retryBtn').style.display = 'none';
+
+            try {
+                // 步驟1: 連線伺服器
+                await new Promise(r => setTimeout(r, 600));
+                setStepDone('step1');
+                setStepActive('step2');
+
+                // 步驟2: 建立授權範圍
+                await new Promise(r => setTimeout(r, 600));
+                setStepDone('step2');
+                setStepActive('step3');
+
+                // 步驟3: 發起授權跳轉
+                await new Promise(r => setTimeout(r, 400));
+
+                FHIR.oauth2.authorize({
+                    clientId: "cc344727-6f90-496c-94fd-c7829aa9a51d",
+                    scope: "patient/*.read patient/*.write openid fhirUser launch",
+                    redirectUri: "index.html",
+                    // iss: "https://thas.mohw.gov.tw/v/r4/fhir"
+                });
+
+            } catch (err) {
+                showError(`無法連線至 THAS FHIR 授權端點。<br>錯誤：${err.message || '未知錯誤'}`);
+            }
+        }
+
+        window.onload = doAuthorize;
+    </script>
+</body>
+</html>
