@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>敗血症早期監控系統 - Sepsis Early Warning Dashboard</title>
+    <!-- SMART on FHIR client -->
+    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -11,6 +13,156 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             height: 100vh; overflow: hidden;
         }
+
+        /* ===== OAuth 驗證遮罩 ===== */
+        #authOverlay {
+            position: fixed;
+            inset: 0;
+            background: #0a0e1a;
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #authOverlay::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(118,75,162,0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(118,75,162,0.07) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: gridScroll 20s linear infinite;
+        }
+        @keyframes gridScroll {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(40px); }
+        }
+        .auth-glow {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+        }
+        .auth-glow-1 {
+            width: 360px; height: 360px;
+            background: rgba(118,75,162,0.22);
+            top: -80px; left: -80px;
+            animation: floatG 9s ease-in-out infinite;
+        }
+        .auth-glow-2 {
+            width: 280px; height: 280px;
+            background: rgba(102,126,234,0.18);
+            bottom: -60px; right: -60px;
+            animation: floatG 11s ease-in-out infinite reverse;
+        }
+        @keyframes floatG {
+            0%,100% { transform: translate(0,0) scale(1); }
+            50% { transform: translate(16px,16px) scale(1.08); }
+        }
+        .auth-card {
+            position: relative;
+            z-index: 10;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(24px);
+            padding: 52px 48px;
+            border-radius: 24px;
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+            box-shadow:
+                0 0 0 1px rgba(118,75,162,0.3),
+                0 32px 80px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.07);
+        }
+        .auth-icon {
+            width: 72px; height: 72px;
+            margin: 0 auto 28px;
+            border-radius: 20px;
+            background: linear-gradient(135deg,#764ba2,#667eea);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 8px 32px rgba(118,75,162,0.5);
+        }
+        .auth-card h2 {
+            color: #f0f0f0;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .auth-subtitle {
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
+            margin-bottom: 36px;
+        }
+        .auth-spinner-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+        .auth-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(167,139,250,0.2);
+            border-top-color: #a78bfa;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .auth-status {
+            font-size: 14px;
+            color: rgba(255,255,255,0.55);
+            min-height: 20px;
+            transition: color 0.3s;
+        }
+        .auth-status.success { color: rgba(103,232,149,0.9); }
+        .auth-status.error   { color: rgba(255,100,100,0.9); }
+
+        /* 授權失敗面板 */
+        #authError {
+            display: none;
+            margin-top: 28px;
+            background: rgba(220,53,69,0.1);
+            border: 1px solid rgba(220,53,69,0.3);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: left;
+        }
+        #authError h4 { color: #ff8080; margin-bottom: 8px; font-size: 15px; }
+        #authError p  { color: rgba(255,160,160,0.8); font-size: 13px; line-height: 1.6; }
+        .auth-btn-group { display: flex; gap: 10px; margin-top: 16px; }
+        .auth-btn {
+            flex: 1;
+            padding: 11px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .auth-btn-primary {
+            background: linear-gradient(135deg,#764ba2,#667eea);
+            color: white;
+        }
+        .auth-btn-secondary {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.6);
+        }
+        .auth-btn:hover { transform: translateY(-1px); opacity: 0.9; }
+        .auth-version {
+            margin-top: 28px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.18);
+            letter-spacing: 0.08em;
+        }
+
+        /* ===== 主系統（驗證後顯示）===== */
         .container { display: flex; height: 100vh; }
         .sidebar { 
             width: 380px; background: rgba(255,255,255,0.97); 
@@ -68,14 +220,74 @@
         .upload-history { max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.5); border-radius: 12px; padding: 15px; font-size: 14px; }
         .history-item { padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.1); }
         .history-item:last-child { border-bottom: none; }
-        @media (max-width: 768px) { .container { flex-direction: column; } .sidebar { width: 100%; height: auto; } .main { padding: 20px; } }
+
+        /* 已驗證徽章 */
+        #authBadge {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: rgba(40,167,69,0.1);
+            border: 1px solid rgba(40,167,69,0.4);
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 12px;
+            color: #28a745;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; }
+            .main { padding: 20px; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+
+    <!-- ===== OAuth 驗證遮罩 ===== -->
+    <div id="authOverlay">
+        <div class="auth-glow auth-glow-1"></div>
+        <div class="auth-glow auth-glow-2"></div>
+        <div class="auth-card">
+            <div class="auth-icon">🔐</div>
+            <h2>OAuth 授權驗證中</h2>
+            <p class="auth-subtitle">正在驗證 THAS FHIR 存取權杖</p>
+
+            <div class="auth-spinner-wrap" id="spinnerWrap">
+                <div class="auth-spinner"></div>
+            </div>
+
+            <p class="auth-status" id="authStatusMsg">正在交換授權碼...</p>
+
+            <!-- 驗證失敗提示 -->
+            <div id="authError">
+                <h4>⚠️ 驗證失敗</h4>
+                <p id="authErrorMsg">無法取得存取權杖。請確認您已透過正確的 SMART on FHIR 啟動流程進入本系統。</p>
+                <div class="auth-btn-group">
+                    <button class="auth-btn auth-btn-primary" onclick="window.location.href='launch.html'">
+                        🔄 重新啟動授權
+                    </button>
+                    <button class="auth-btn auth-btn-secondary" onclick="enterDemoMode()">
+                        🧪 Demo 模式
+                    </button>
+                </div>
+            </div>
+
+            <p class="auth-version">FHIR R4 · SMART on FHIR v2 · 衛福部 THAS</p>
+        </div>
+    </div>
+
+    <!-- ===== 主系統 ===== -->
+    <div class="container" id="mainApp" style="display:none;">
         <!-- 左側導航與控制面板 -->
         <div class="sidebar">
             <div class="logo">🚨 敗血症監控系統</div>
+
+            <!-- 已驗證徽章 -->
+            <div id="authBadge">
+                <span>✅</span>
+                <span id="authBadgeText">FHIR 已驗證</span>
+            </div>
             
             <!-- 即時警示 -->
             <div class="alert-banner" id="alertBanner" style="display:none;">
@@ -174,6 +386,111 @@
     </div>
 
     <script>
+        // ==================== SMART on FHIR OAuth 驗證 ====================
+
+        // 全域 FHIR client（授權後使用）
+        let fhirClient = null;
+
+        /**
+         * 更新授權遮罩的狀態訊息
+         */
+        function setAuthStatus(msg, type = '') {
+            const el = document.getElementById('authStatusMsg');
+            el.textContent = msg;
+            el.className = 'auth-status' + (type ? ' ' + type : '');
+        }
+
+        /**
+         * 顯示授權失敗 UI
+         */
+        function showAuthError(detail) {
+            document.getElementById('spinnerWrap').style.display = 'none';
+            document.getElementById('authError').style.display = 'block';
+            if (detail) document.getElementById('authErrorMsg').textContent = detail;
+        }
+
+        /**
+         * 隱藏遮罩並顯示主系統
+         */
+        function revealApp(client) {
+            fhirClient = client;
+
+            // 在已驗證徽章中顯示 patient ID（如有）
+            const patientId = client.getPatientId ? client.getPatientId() : null;
+            const badgeEl   = document.getElementById('authBadge');
+            const badgeTxt  = document.getElementById('authBadgeText');
+            badgeTxt.textContent = patientId
+                ? `✅ FHIR 已驗證 · Patient: ${patientId}`
+                : '✅ FHIR OAuth 已驗證';
+            badgeEl.style.display = 'flex';
+
+            // 淡出遮罩
+            const overlay = document.getElementById('authOverlay');
+            overlay.style.transition = 'opacity 0.5s ease';
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.getElementById('mainApp').style.display = 'flex';
+                initDashboard();
+            }, 500);
+        }
+
+        /**
+         * Demo 模式（略過 OAuth，供本機測試用）
+         */
+        function enterDemoMode() {
+            console.warn('⚠️ 進入 Demo 模式：OAuth 驗證已略過');
+            setAuthStatus('Demo 模式 - 未連接真實 FHIR 伺服器', 'error');
+
+            const overlay = document.getElementById('authOverlay');
+            overlay.style.transition = 'opacity 0.5s ease';
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                const badgeTxt = document.getElementById('authBadgeText');
+                badgeTxt.textContent = '⚠️ Demo 模式（未驗證）';
+                document.getElementById('authBadge').style.display = 'flex';
+                document.getElementById('authBadge').style.borderColor = 'rgba(255,193,7,0.5)';
+                document.getElementById('authBadge').style.color = '#856404';
+                document.getElementById('mainApp').style.display = 'flex';
+                initDashboard();
+            }, 500);
+        }
+
+        /**
+         * 主授權流程：呼叫 FHIR.oauth2.ready()
+         * 此函數在 OAuth callback（帶有 code 參數）時完成 token 交換；
+         * 若非授權回呼（直接開啟頁面），則捕捉錯誤並提示重新授權。
+         */
+        async function initAuth() {
+            try {
+                setAuthStatus('正在驗證授權碼...');
+
+                const client = await FHIR.oauth2.ready();
+
+                setAuthStatus('授權成功，載入系統中...', 'success');
+                await new Promise(r => setTimeout(r, 600));
+                revealApp(client);
+
+            } catch (err) {
+                console.error('SMART on FHIR 授權失敗:', err);
+
+                // 若錯誤是「找不到 state」表示非正常 OAuth 流程（直接輸入 URL）
+                const isNoState = err.message &&
+                    (err.message.includes('state') || err.message.includes('No state'));
+
+                showAuthError(isNoState
+                    ? '未偵測到有效的 OAuth 授權狀態。請從 launch.html 重新啟動授權流程，而非直接開啟此頁面。'
+                    : `授權錯誤：${err.message || '未知錯誤'}`
+                );
+            }
+        }
+
+        // 頁面載入後立即執行 OAuth ready()
+        window.onload = function() {
+            initAuth();
+        };
+
         // ==================== 病人資料 ====================
         let patients = {
             "patient-123": {
@@ -234,6 +551,9 @@
             qsofaEl.className = latest.qsofa >= 2 
                 ? 'qsofa-score qsofa-high' 
                 : 'qsofa-score qsofa-low';
+            qsofaEl.innerHTML = latest.qsofa >= 2
+                ? `qSOFA: <span id="qsofaValue">${latest.qsofa}</span> 分 ⚠️ 高風險`
+                : `qSOFA: <span id="qsofaValue">${latest.qsofa}</span> 分 ✅ 低風險`;
 
             document.getElementById('alertBanner').style.display = latest.qsofa >= 2 ? 'block' : 'none';
         }
@@ -241,11 +561,9 @@
         function selectPatient(patientId) {
             if (!patients[patientId]) return;
             currentPatientId = patientId;
-
             document.querySelectorAll('.patient-card').forEach(card => {
                 card.classList.toggle('high-risk', card.getAttribute('data-id') === patientId);
             });
-
             updateDashboard(patients[patientId]);
         }
 
@@ -328,7 +646,18 @@
             };
 
             try {
-                console.log('🚀 上傳至 THAS FHIR:', fhirBundle);
+                // 若有真實 fhirClient，使用它上傳
+                if (fhirClient && fhirClient.request) {
+                    await fhirClient.request({
+                        url: "",
+                        method: "POST",
+                        body: JSON.stringify(fhirBundle),
+                        headers: { "Content-Type": "application/fhir+json" }
+                    });
+                } else {
+                    console.log('🚀 [Demo] 上傳至 THAS FHIR:', fhirBundle);
+                }
+
                 const obsId = '69517' + Math.floor(Math.random() * 100);
                 document.getElementById('lastObsId').textContent = obsId;
                 document.getElementById('uploadStatus').style.display = 'block';
@@ -343,7 +672,7 @@
                 updateHistory();
                 alert(`✅ FHIR Bundle 上傳成功！\n病患：${patient.name}\nObservation ID: ${obsId}`);
             } catch (error) {
-                alert('❌ 上傳失敗');
+                alert('❌ 上傳失敗：' + (error.message || ''));
             } finally {
                 btn.disabled = false;
                 btn.textContent = '💾 上傳FHIR至THAS';
@@ -374,8 +703,8 @@
             alert(`🚀 CDS Hooks 已觸發！\n病患：${patient.name}\n✅ 建議：血液培養 + 廣效抗生素`);
         }
 
-        // ==================== 初始化 ====================
-        window.onload = function() {
+        // ==================== 初始化儀表板（授權後呼叫）====================
+        function initDashboard() {
             const patientListEl = document.getElementById('patientList');
             patientListEl.innerHTML = '';
 
@@ -410,7 +739,7 @@
                 document.getElementById('doorTime').textContent = 
                     `${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
             }, 1000);
-        };
+        }
     </script>
 </body>
 </html>
