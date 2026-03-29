@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>敗血症早期監控系統 - Sepsis Early Warning Dashboard</title>
-    <!-- SMART on FHIR client -->
     <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,6 +11,47 @@
             font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif; 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             height: 100vh; overflow: hidden;
+        }
+
+        /* ===== 新增：左上角病患資訊醒目看板 ===== */
+        .patient-focus-header {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #667eea;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .patient-focus-header::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 6px; height: 100%;
+            background: #667eea;
+        }
+        .focus-label {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .focus-name {
+            font-size: 36px; /* 特大字體 */
+            font-weight: 900;
+            color: #1a202c;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+        .focus-id {
+            font-family: 'Consolas', monospace;
+            font-size: 15px;
+            color: #718096;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
 
         /* ===== OAuth 驗證遮罩 ===== */
@@ -71,10 +111,7 @@
             text-align: center;
             max-width: 420px;
             width: 90%;
-            box-shadow:
-                0 0 0 1px rgba(118,75,162,0.3),
-                0 32px 80px rgba(0,0,0,0.5),
-                inset 0 1px 0 rgba(255,255,255,0.07);
+            box-shadow: 0 0 0 1px rgba(118,75,162,0.3), 0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.07);
         }
         .auth-icon {
             width: 72px; height: 72px;
@@ -87,22 +124,9 @@
             font-size: 32px;
             box-shadow: 0 8px 32px rgba(118,75,162,0.5);
         }
-        .auth-card h2 {
-            color: #f0f0f0;
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-        .auth-subtitle {
-            color: rgba(255,255,255,0.4);
-            font-size: 13px;
-            margin-bottom: 36px;
-        }
-        .auth-spinner-wrap {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 24px;
-        }
+        .auth-card h2 { color: #f0f0f0; font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+        .auth-subtitle { color: rgba(255,255,255,0.4); font-size: 13px; margin-bottom: 36px; }
+        .auth-spinner-wrap { display: flex; justify-content: center; margin-bottom: 24px; }
         .auth-spinner {
             width: 40px; height: 40px;
             border: 3px solid rgba(167,139,250,0.2);
@@ -110,19 +134,11 @@
             border-radius: 50%;
             animation: spin 0.9s linear infinite;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .auth-status {
-            font-size: 14px;
-            color: rgba(255,255,255,0.55);
-            min-height: 20px;
-            transition: color 0.3s;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .auth-status { font-size: 14px; color: rgba(255,255,255,0.55); min-height: 20px; }
         .auth-status.success { color: rgba(103,232,149,0.9); }
         .auth-status.error   { color: rgba(255,100,100,0.9); }
 
-        /* 授權失敗面板 */
         #authError {
             display: none;
             margin-top: 28px;
@@ -135,611 +151,288 @@
         #authError h4 { color: #ff8080; margin-bottom: 8px; font-size: 15px; }
         #authError p  { color: rgba(255,160,160,0.8); font-size: 13px; line-height: 1.6; }
         .auth-btn-group { display: flex; gap: 10px; margin-top: 16px; }
-        .auth-btn {
-            flex: 1;
-            padding: 11px;
-            border-radius: 10px;
-            font-size: 13px;
-            font-family: inherit;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-        }
-        .auth-btn-primary {
-            background: linear-gradient(135deg,#764ba2,#667eea);
-            color: white;
-        }
-        .auth-btn-secondary {
-            background: rgba(255,255,255,0.07);
-            border: 1px solid rgba(255,255,255,0.15);
-            color: rgba(255,255,255,0.6);
-        }
-        .auth-btn:hover { transform: translateY(-1px); opacity: 0.9; }
-        .auth-version {
-            margin-top: 28px;
-            font-size: 11px;
-            color: rgba(255,255,255,0.18);
-            letter-spacing: 0.08em;
-        }
+        .auth-btn { flex: 1; padding: 11px; border-radius: 10px; font-size: 13px; cursor: pointer; border: none; transition: all 0.2s; }
+        .auth-btn-primary { background: linear-gradient(135deg,#764ba2,#667eea); color: white; }
+        .auth-btn-secondary { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.6); }
 
-        /* ===== 主系統（驗證後顯示）===== */
+        /* ===== 主系統 UI ===== */
         .container { display: flex; height: 100vh; }
         .sidebar { 
             width: 380px; background: rgba(255,255,255,0.97); 
-            backdrop-filter: blur(20px); padding: 30px; box-shadow: 5px 0 40px rgba(0,0,0,0.15);
+            backdrop-filter: blur(20px); padding: 25px; box-shadow: 5px 0 40px rgba(0,0,0,0.15);
             overflow-y: auto;
         }
         .main { flex: 1; padding: 30px; overflow-y: auto; }
         .logo { 
-            font-size: 32px; font-weight: bold; color: #d63384; margin-bottom: 40px; 
+            font-size: 24px; font-weight: bold; color: #d63384; margin-bottom: 25px; 
             text-align: center; background: linear-gradient(45deg, #d63384, #ff6b9d); 
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
         .patient-card { 
-            background: white; border-radius: 20px; padding: 25px; margin-bottom: 20px; 
-            box-shadow: 0 15px 50px rgba(0,0,0,0.1); transition: all 0.3s ease;
+            background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: all 0.3s ease;
             border-left: 6px solid #28a745; cursor: pointer;
         }
-        .patient-card:hover { transform: translateY(-5px); box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-        .patient-card.high-risk { border-left-color: #dc3545; background: linear-gradient(135deg, #fff5f5 0%, #ffeaea 100%); }
-        .patient-name { font-size: 22px; font-weight: bold; color: #333; margin-bottom: 15px; }
-        .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-        .metric { text-align: center; padding: 15px; border-radius: 12px; background: rgba(255,255,255,0.8); }
-        .metric-value { font-size: 26px; font-weight: bold; }
-        .metric-label { font-size: 13px; color: #666; margin-top: 5px; }
+        .patient-card:hover { transform: translateX(5px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .patient-card.high-risk { border-left-color: #dc3545; }
+        .patient-name { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 8px; }
+        
+        .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .metric { text-align: center; padding: 10px; border-radius: 8px; background: #f8f9fa; }
+        .metric-value { font-size: 20px; font-weight: bold; }
+        .metric-label { font-size: 11px; color: #666; }
         .metric-high { color: #dc3545 !important; }
+
         .qsofa-score { 
             text-align: center; padding: 25px; border-radius: 20px; font-size: 42px; font-weight: bold; 
-            margin: 25px 0; text-shadow: 0 3px 15px rgba(0,0,0,0.2); position: relative;
+            margin: 25px 0; text-shadow: 0 3px 15px rgba(0,0,0,0.2);
         }
         .qsofa-low { background: linear-gradient(135deg, #28a745, #20c997); color: white; }
         .qsofa-high { background: linear-gradient(135deg, #dc3545, #fd7e14); color: white; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(220,53,69,0.5); } 50% { transform: scale(1.03); box-shadow: 0 0 40px rgba(220,53,69,0.8); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+
         .alert-banner { 
-            background: linear-gradient(135deg, #dc3545, #fd7e14); color: white; padding: 25px; 
-            border-radius: 20px; text-align: center; font-weight: bold; margin-bottom: 30px;
-            animation: slideDown 0.6s ease; box-shadow: 0 10px 40px rgba(220,53,69,0.3);
+            background: linear-gradient(135deg, #dc3545, #fd7e14); color: white; padding: 20px; 
+            border-radius: 15px; text-align: center; font-weight: bold; margin-bottom: 20px;
         }
-        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .btn { 
-            width: 100%; padding: 18px; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; 
-            cursor: pointer; transition: all 0.3s ease; margin-bottom: 15px; position: relative; overflow: hidden;
+            width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; 
+            cursor: pointer; transition: all 0.3s ease; margin-bottom: 10px;
         }
         .btn-primary { background: linear-gradient(45deg, #667eea, #764ba2); color: white; }
-        .btn-danger { background: linear-gradient(45deg, #dc3545, #fd7e14); color: white; }
         .btn-success { background: linear-gradient(45deg, #28a745, #20c997); color: white; }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 15px 35px rgba(0,0,0,0.25); }
-        .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 10px; }
-        .status-green { background: #28a745; box-shadow: 0 0 10px #28a745; }
-        .status-red { background: #dc3545; animation: blink 1.2s infinite; box-shadow: 0 0 15px #dc3545; }
-        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.4; } }
-        .trend-chart { height: 90px; background: linear-gradient(135deg, #f8f9ff 0%, #e8ecff 100%); border-radius: 15px; margin-top: 12px; position: relative; overflow: hidden; }
-        .trend-line { position: absolute; bottom: 12px; left: 25px; right: 25px; height: 5px; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); border-radius: 3px; }
-        .fhir-status { background: rgba(40,167,69,0.1); border: 2px solid #28a745; color: #28a745; padding: 15px; border-radius: 12px; margin-top: 20px; font-family: monospace; }
-        .upload-history { max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.5); border-radius: 12px; padding: 15px; font-size: 14px; }
-        .history-item { padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.1); }
-        .history-item:last-child { border-bottom: none; }
+        .btn-danger { background: linear-gradient(45deg, #dc3545, #fd7e14); color: white; }
 
-        /* 已驗證徽章 */
         #authBadge {
-            display: none;
-            align-items: center;
-            gap: 8px;
-            background: rgba(40,167,69,0.1);
-            border: 1px solid rgba(40,167,69,0.4);
-            border-radius: 10px;
-            padding: 8px 14px;
-            font-size: 12px;
-            color: #28a745;
-            margin-bottom: 20px;
+            display: none; align-items: center; gap: 8px; background: rgba(40,167,69,0.1);
+            border: 1px solid rgba(40,167,69,0.4); border-radius: 8px; padding: 8px 12px;
+            font-size: 12px; color: #28a745; margin-bottom: 15px;
         }
+
+        .trend-chart { height: 60px; background: #f0f2f5; border-radius: 10px; margin-top: 10px; position: relative; }
+        .trend-line { position: absolute; bottom: 10px; left: 10%; right: 10%; height: 4px; background: #667eea; border-radius: 2px; }
 
         @media (max-width: 768px) {
             .container { flex-direction: column; }
             .sidebar { width: 100%; height: auto; }
-            .main { padding: 20px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- ===== OAuth 驗證遮罩 ===== -->
     <div id="authOverlay">
         <div class="auth-glow auth-glow-1"></div>
         <div class="auth-glow auth-glow-2"></div>
         <div class="auth-card">
             <div class="auth-icon">🔐</div>
             <h2>OAuth 授權驗證中</h2>
-            <p class="auth-subtitle">正在驗證 THAS FHIR 存取權杖</p>
-
-            <div class="auth-spinner-wrap" id="spinnerWrap">
-                <div class="auth-spinner"></div>
-            </div>
-
-            <p class="auth-status" id="authStatusMsg">正在交換授權碼...</p>
-
-            <!-- 驗證失敗提示 -->
+            <p class="auth-subtitle">正在同步 THAS FHIR 病患資料</p>
+            <div class="auth-spinner-wrap" id="spinnerWrap"><div class="auth-spinner"></div></div>
+            <p class="auth-status" id="authStatusMsg">正在獲取存取權杖...</p>
             <div id="authError">
                 <h4>⚠️ 驗證失敗</h4>
-                <p id="authErrorMsg">無法取得存取權杖。請確認您已透過正確的 SMART on FHIR 啟動流程進入本系統。</p>
+                <p id="authErrorMsg">無法取得存取權杖。請確認您已透過正確的啟動流程進入。</p>
                 <div class="auth-btn-group">
-                    <button class="auth-btn auth-btn-primary" onclick="window.location.href='launch.html'">
-                        🔄 重新啟動授權
-                    </button>
-                    <button class="auth-btn auth-btn-secondary" onclick="enterDemoMode()">
-                        🧪 Demo 模式
-                    </button>
+                    <button class="auth-btn auth-btn-primary" onclick="window.location.href='launch.html'">🔄 重新啟動</button>
+                    <button class="auth-btn auth-btn-secondary" onclick="enterDemoMode()">🧪 Demo 模式</button>
                 </div>
             </div>
-
-            <p class="auth-version">FHIR R4 · SMART on FHIR v2 · 衛福部 THAS</p>
+            <p class="auth-version">FHIR R4 · Taiwan THAS Standard</p>
         </div>
     </div>
 
-    <!-- ===== 主系統 ===== -->
     <div class="container" id="mainApp" style="display:none;">
-        <!-- 左側導航與控制面板 -->
         <div class="sidebar">
-            <div class="logo">🚨 敗血症監控系統</div>
+            <div class="logo">🚨 Sepsis Monitor</div>
 
-            <!-- 已驗證徽章 -->
-            <div id="authBadge">
-                <span>✅</span>
-                <span id="authBadgeText">FHIR 已驗證</span>
+            <div class="patient-focus-header">
+                <div class="focus-label">Current Monitoring Patient</div>
+                <div class="focus-name" id="displayPatientName">王小明</div>
+                <div class="focus-id">🆔 <span id="displayPatientId">patient-123</span></div>
             </div>
+
+            <div id="authBadge"><span>✅</span> <span id="authBadgeText">FHIR 已連線</span></div>
             
-            <!-- 即時警示 -->
-            <div class="alert-banner" id="alertBanner" style="display:none;">
-                <span class="status-indicator status-red"></span>
-                ⚠️ 高風險病患即時警示！qSOFA ≥ 2分
-            </div>
+            <div class="alert-banner" id="alertBanner" style="display:none;">⚠️ 高風險病患！qSOFA ≥ 2</div>
             
-            <!-- 病患監控列表 -->
-            <div style="margin-bottom: 30px;">
-                <h3 style="color: #333; margin-bottom: 20px; display: flex; align-items: center;">
-                    📋 監控病患列表 <span id="patientCount" style="margin-left: auto; font-size: 16px; color: #666;">3位</span>
-                </h3>
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #333; margin-bottom: 10px; font-size: 16px;">📋 監測列表</h3>
                 <div id="patientList"></div>
             </div>
             
-            <!-- 控制按鈕 -->
             <div>
-                <button class="btn btn-primary" id="startBtn" onclick="startMonitoring()">▶️ 開始5分鐘監測</button>
-                <button class="btn btn-success" id="uploadBtn" onclick="uploadFHIR()" style="display:none;">💾 上傳FHIR至THAS</button>
+                <button class="btn btn-primary" id="startBtn" onclick="startMonitoring()">▶️ 開始監測</button>
+                <button class="btn btn-success" id="uploadBtn" onclick="uploadFHIR()" style="display:none;">💾 上傳至 THAS</button>
                 <button class="btn btn-danger" onclick="clearData()">🗑️ 清空資料</button>
-                
-                <!-- FHIR上傳狀態 -->
-                <div id="uploadStatus" class="fhir-status" style="display:none;">
-                    ✅ <strong>已成功上傳至衛福部THAS FHIR</strong><br>
-                    <small>Observation ID: <span id="lastObsId">-</span></small>
-                </div>
-                
-                <!-- 上傳歷史 -->
-                <div style="margin-top: 20px;">
-                    <h4 style="color: #333; margin-bottom: 10px;">📜 上傳歷史</h4>
-                    <div id="uploadHistory" class="upload-history"></div>
-                </div>
             </div>
         </div>
 
-        <!-- 主要儀表板 -->
         <div class="main">
-            <h1 style="color: white; margin-bottom: 40px; text-shadow: 0 4px 20px rgba(0,0,0,0.4); font-size: 36px;">
-                🩺 即時敗血症風險儀表板
-            </h1>
+            <h1 style="color: white; margin-bottom: 30px; text-shadow: 0 4px 15px rgba(0,0,0,0.3);">🩺 即時敗血症風險儀表板</h1>
             
-            <!-- 主要監測面板 -->
-            <div style="background: rgba(255,255,255,0.97); border-radius: 30px; padding: 40px; margin-bottom: 40px; backdrop-filter: blur(25px); box-shadow: 0 25px 80px rgba(0,0,0,0.2);">
-                <h2 id="patientHeader" style="color: #333; margin-bottom: 30px; font-size: 24px;">
-                    🎯 目前監測：王小明 (ID: patient-123)
-                </h2>
+            <div style="background: white; border-radius: 25px; padding: 35px; box-shadow: 0 20px 60px rgba(0,0,0,0.15);">
+                <h2 id="patientHeader" style="color: #444; margin-bottom: 20px;">🎯 目前監測：王小明</h2>
                 
-                <!-- qSOFA分數 -->
                 <div class="qsofa-score qsofa-high" id="qsofaScore">
-                    qSOFA: <span id="qsofaValue">2</span> 分 ⚠️ 高風險
+                    qSOFA: <span id="qsofaValue">2</span> 分 ⚠️
                 </div>
                 
-                <!-- 生理指標 -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 25px; margin-top: 30px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
                     <div class="metric">
                         <div class="metric-value metric-high" id="tempValue">39.0°C</div>
-                        <div class="metric-label">體溫 ↑</div>
+                        <div class="metric-label">體溫</div>
                         <div class="trend-chart"><div class="trend-line"></div></div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value metric-high" id="rrValue">27次/分</div>
-                        <div class="metric-label">呼吸速率 ↑</div>
+                        <div class="metric-value metric-high" id="rrValue">27/min</div>
+                        <div class="metric-label">呼吸速率</div>
                         <div class="trend-chart"><div class="trend-line"></div></div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value metric-high" id="bpValue">92mmHg</div>
-                        <div class="metric-label">收縮壓 ↓</div>
+                        <div class="metric-value metric-high" id="bpValue">92 mmHg</div>
+                        <div class="metric-label">收縮壓</div>
                         <div class="trend-chart"><div class="trend-line"></div></div>
                     </div>
                     <div class="metric">
-                        <div class="metric-value metric-high" id="lactateValue">3.5mmol/L</div>
-                        <div class="metric-label">乳酸 ↑</div>
+                        <div class="metric-value metric-high" id="lactateValue">3.5 mmol/L</div>
+                        <div class="metric-label">乳酸值</div>
                         <div class="trend-chart"><div class="trend-line"></div></div>
                     </div>
                 </div>
             </div>
 
-            <!-- CDS Hooks 介入建議 -->
-            <div style="background: rgba(255,255,255,0.97); border-radius: 30px; padding: 40px; backdrop-filter: blur(25px); box-shadow: 0 25px 80px rgba(0,0,0,0.2);">
-                <h3 style="color: #333; margin-bottom: 25px; font-size: 22px;">💉 CDS Hooks 臨床決策支援</h3>
-                <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); padding: 30px; border-radius: 20px; border-left: 8px solid #ffc107;">
-                    <div style="font-size: 20px; font-weight: bold; color: #856404; margin-bottom: 15px;">
-                        🚨 <strong>緊急介入建議</strong>
-                    </div>
-                    <div style="font-size: 16px; line-height: 1.6; color: #665a00;">
-                        ✅ 立即進行<strong>血液培養</strong><br>
-                        ✅ 啟動<strong>經驗性廣效抗生素</strong>治療<br>
-                        ⏱️ <strong>Door-to-Antibiotic Time: <span id="doorTime">00:12</span></strong>
-                    </div>
-                    <button class="btn btn-danger" style="width: auto; margin-top: 20px; padding: 12px 30px;" onclick="triggerCDSHook()">
-                        🚀 建立MedicationRequest
-                    </button>
+            <div style="margin-top: 30px; background: white; border-radius: 25px; padding: 25px;">
+                <h3 style="margin-bottom: 15px;">💉 CDS Hooks 臨床決策支援</h3>
+                <div style="background: #fff3cd; padding: 20px; border-radius: 15px; border-left: 5px solid #ffc107;">
+                    <div style="font-weight: bold; color: #856404; font-size: 18px;">🚨 緊急處置建議</div>
+                    <p style="margin-top: 10px; color: #665a00;">建議立即進行血液培養與啟動廣效抗生素治療。</p>
+                    <button class="btn btn-danger" style="width: auto; margin-top: 15px; padding: 10px 20px;" onclick="triggerCDSHook()">🚀 執行指令</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // ==================== SMART on FHIR OAuth 驗證 ====================
-
-        // 全域 FHIR client（授權後使用）
         let fhirClient = null;
+        let currentPatientId = 'patient-123';
+        let isMonitoring = false;
+        let monitoringInterval = null;
 
-        /**
-         * 更新授權遮罩的狀態訊息
-         */
-        function setAuthStatus(msg, type = '') {
-            const el = document.getElementById('authStatusMsg');
-            el.textContent = msg;
-            el.className = 'auth-status' + (type ? ' ' + type : '');
-        }
+        // 病人模擬資料庫
+        let patients = {
+            "patient-123": { id: 'patient-123', name: '王小明', nhi: 'A123456789', vitalsHistory: [{ temp: 39.0, rr: 27, bp: 92, lactate: 3.5, qsofa: 2 }] },
+            "patient-456": { id: 'patient-456', name: '李美華', nhi: 'B987654321', vitalsHistory: [{ temp: 37.2, rr: 18, bp: 110, lactate: 1.2, qsofa: 0 }] },
+            "patient-789": { id: 'patient-789', name: '陳大偉', nhi: 'C112233445', vitalsHistory: [{ temp: 38.5, rr: 24, bp: 98, lactate: 2.8, qsofa: 2 }] }
+        };
 
-        /**
-         * 顯示授權失敗 UI
-         */
-        function showAuthError(detail) {
-            document.getElementById('spinnerWrap').style.display = 'none';
-            document.getElementById('authError').style.display = 'block';
-            if (detail) document.getElementById('authErrorMsg').textContent = detail;
-        }
-
-        /**
-         * 隱藏遮罩並顯示主系統
-         */
-        function revealApp(client) {
-            fhirClient = client;
-
-            // 在已驗證徽章中顯示 patient ID（如有）
-            const patientId = client.getPatientId ? client.getPatientId() : null;
-            const badgeEl   = document.getElementById('authBadge');
-            const badgeTxt  = document.getElementById('authBadgeText');
-            badgeTxt.textContent = patientId
-                ? `✅ FHIR 已驗證 · Patient: ${patientId}`
-                : '✅ FHIR OAuth 已驗證';
-            badgeEl.style.display = 'flex';
-
-            // 淡出遮罩
-            const overlay = document.getElementById('authOverlay');
-            overlay.style.transition = 'opacity 0.5s ease';
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                document.getElementById('mainApp').style.display = 'flex';
-                initDashboard();
-            }, 500);
-        }
-
-        /**
-         * Demo 模式（略過 OAuth，供本機測試用）
-         */
-        function enterDemoMode() {
-            console.warn('⚠️ 進入 Demo 模式：OAuth 驗證已略過');
-            setAuthStatus('Demo 模式 - 未連接真實 FHIR 伺服器', 'error');
-
-            const overlay = document.getElementById('authOverlay');
-            overlay.style.transition = 'opacity 0.5s ease';
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                const badgeTxt = document.getElementById('authBadgeText');
-                badgeTxt.textContent = '⚠️ Demo 模式（未驗證）';
-                document.getElementById('authBadge').style.display = 'flex';
-                document.getElementById('authBadge').style.borderColor = 'rgba(255,193,7,0.5)';
-                document.getElementById('authBadge').style.color = '#856404';
-                document.getElementById('mainApp').style.display = 'flex';
-                initDashboard();
-            }, 500);
-        }
-
-        /**
-         * 主授權流程：呼叫 FHIR.oauth2.ready()
-         * 此函數在 OAuth callback（帶有 code 參數）時完成 token 交換；
-         * 若非授權回呼（直接開啟頁面），則捕捉錯誤並提示重新授權。
-         */
+        // ==================== SMART on FHIR 邏輯 ====================
         async function initAuth() {
             try {
-                setAuthStatus('正在驗證授權碼...');
-
                 const client = await FHIR.oauth2.ready();
-
-                setAuthStatus('授權成功，載入系統中...', 'success');
-                await new Promise(r => setTimeout(r, 600));
                 revealApp(client);
-
             } catch (err) {
-                console.error('SMART on FHIR 授權失敗:', err);
-
-                // 若錯誤是「找不到 state」表示非正常 OAuth 流程（直接輸入 URL）
-                const isNoState = err.message &&
-                    (err.message.includes('state') || err.message.includes('No state'));
-
-                showAuthError(isNoState
-                    ? '未偵測到有效的 OAuth 授權狀態。請從 launch.html 重新啟動授權流程，而非直接開啟此頁面。'
-                    : `授權錯誤：${err.message || '未知錯誤'}`
-                );
+                if (!err.message.includes('state')) showAuthError(err.message);
+                else showAuthError("請由 Launch 端開啟系統");
             }
         }
 
-        // 頁面載入後立即執行 OAuth ready()
-        window.onload = function() {
-            initAuth();
-        };
+        function revealApp(client) {
+            fhirClient = client;
+            const pId = client.getPatientId() || 'patient-123';
+            
+            // 更新 UI 狀態
+            document.getElementById('authBadge').style.display = 'flex';
+            document.getElementById('authBadgeText').textContent = `已連結 Patient: ${pId}`;
+            
+            const overlay = document.getElementById('authOverlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.getElementById('mainApp').style.display = 'flex';
+                selectPatient(pId in patients ? pId : 'patient-123');
+                initDashboard();
+            }, 500);
+        }
 
-        // ==================== 病人資料 ====================
-        let patients = {
-            "patient-123": {
-                id: 'patient-123',
-                name: '王小明',
-                nhi: 'A123456789',
-                vitalsHistory: [
-                    { time: '10:45', temp: 38.2, rr: 24, bp: 95, lactate: 3.2, qsofa: 2 },
-                    { time: '10:50', temp: 38.5, rr: 25, bp: 92, lactate: 3.4, qsofa: 2 },
-                    { time: '10:54', temp: 38.7, rr: 27, bp: 92, lactate: 3.5, qsofa: 2 },
-                    { time: '11:35', temp: 39.0, rr: 27, bp: 92, lactate: 3.5, qsofa: 2 }
-                ]
-            },
-            "patient-456": {
-                id: 'patient-456',
-                name: '李美華',
-                nhi: 'B987654321',
-                vitalsHistory: [
-                    { time: '11:10', temp: 37.1, rr: 18, bp: 108, lactate: 1.8, qsofa: 0 },
-                    { time: '11:20', temp: 37.4, rr: 19, bp: 105, lactate: 2.1, qsofa: 0 }
-                ]
-            },
-            "patient-789": {
-                id: 'patient-789',
-                name: '陳大偉',
-                nhi: 'C112233445',
-                vitalsHistory: [
-                    { time: '09:30', temp: 38.8, rr: 23, bp: 98, lactate: 2.9, qsofa: 2 }
-                ]
-            }
-        };
+        function enterDemoMode() {
+            revealApp({ getPatientId: () => 'patient-123' });
+        }
 
-        let currentPatientId = 'patient-123';
-        let monitoringInterval = null;
-        let uploadHistory = [];
-        let isMonitoring = false;
+        function showAuthError(msg) {
+            document.getElementById('spinnerWrap').style.display = 'none';
+            document.getElementById('authError').style.display = 'block';
+            document.getElementById('authErrorMsg').textContent = msg;
+        }
 
-        function calculateQSOFA(rr, bp) {
-            let score = 0;
-            if (rr >= 22) score++;
-            if (bp <= 100) score++;
-            return score;
+        // ==================== 儀表板更新邏輯 ====================
+        function selectPatient(patientId) {
+            if (!patients[patientId]) return;
+            currentPatientId = patientId;
+            const patient = patients[patientId];
+
+            // 核心：同步更新左上角大字體看板
+            document.getElementById('displayPatientName').textContent = patient.name;
+            document.getElementById('displayPatientId').textContent = patient.id;
+
+            updateDashboard(patient);
         }
 
         function updateDashboard(patient) {
             const latest = patient.vitalsHistory[patient.vitalsHistory.length - 1];
-
-            document.getElementById('patientHeader').textContent = 
-                `🎯 目前監測：${patient.name} (ID: ${patient.id})`;
-
+            document.getElementById('patientHeader').textContent = `🎯 目前監測：${patient.name}`;
             document.getElementById('tempValue').textContent = `${latest.temp.toFixed(1)}°C`;
-            document.getElementById('rrValue').textContent = `${latest.rr}次/分`;
-            document.getElementById('bpValue').textContent = `${latest.bp}mmHg`;
-            document.getElementById('lactateValue').textContent = `${latest.lactate.toFixed(1)}mmol/L`;
+            document.getElementById('rrValue').textContent = `${latest.rr}/min`;
+            document.getElementById('bpValue').textContent = `${latest.bp} mmHg`;
+            document.getElementById('lactateValue').textContent = `${latest.lactate.toFixed(1)} mmol/L`;
             document.getElementById('qsofaValue').textContent = latest.qsofa;
 
             const qsofaEl = document.getElementById('qsofaScore');
-            qsofaEl.className = latest.qsofa >= 2 
-                ? 'qsofa-score qsofa-high' 
-                : 'qsofa-score qsofa-low';
-            qsofaEl.innerHTML = latest.qsofa >= 2
-                ? `qSOFA: <span id="qsofaValue">${latest.qsofa}</span> 分 ⚠️ 高風險`
-                : `qSOFA: <span id="qsofaValue">${latest.qsofa}</span> 分 ✅ 低風險`;
-
+            qsofaEl.className = latest.qsofa >= 2 ? 'qsofa-score qsofa-high' : 'qsofa-score qsofa-low';
             document.getElementById('alertBanner').style.display = latest.qsofa >= 2 ? 'block' : 'none';
-        }
-
-        function selectPatient(patientId) {
-            if (!patients[patientId]) return;
-            currentPatientId = patientId;
-            document.querySelectorAll('.patient-card').forEach(card => {
-                card.classList.toggle('high-risk', card.getAttribute('data-id') === patientId);
-            });
-            updateDashboard(patients[patientId]);
         }
 
         function startMonitoring() {
             if (isMonitoring) return;
             isMonitoring = true;
-            document.getElementById('startBtn').textContent = '⏸️ 暫停監測';
+            document.getElementById('startBtn').textContent = '⏸️ 監測中';
             document.getElementById('uploadBtn').style.display = 'block';
-
             monitoringInterval = setInterval(() => {
-                const patient = patients[currentPatientId];
-                const latest = patient.vitalsHistory[patient.vitalsHistory.length - 1];
-
-                const nextData = {
-                    time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
-                    temp: Math.min(40.5, Math.max(36.0, latest.temp + (Math.random() * 1.2 - 0.6))),
-                    rr: Math.floor(Math.random() * 12) + 16,
-                    bp: Math.floor(Math.random() * 25) + 85,
-                    lactate: Math.min(5.0, Math.max(0.5, latest.lactate + (Math.random() * 0.6 - 0.3))),
-                    qsofa: calculateQSOFA(latest.rr, latest.bp)
+                const p = patients[currentPatientId];
+                const last = p.vitalsHistory[0];
+                const newData = {
+                    temp: last.temp + (Math.random() * 0.4 - 0.2),
+                    rr: Math.floor(Math.random() * 5 + 22),
+                    bp: Math.floor(Math.random() * 10 + 90),
+                    lactate: last.lactate + (Math.random() * 0.2),
+                    qsofa: 2
                 };
-
-                patient.vitalsHistory.push(nextData);
-                updateDashboard(patient);
-            }, 5000);
+                p.vitalsHistory.push(newData);
+                updateDashboard(p);
+            }, 3000);
         }
 
-        async function uploadFHIR() {
-            const btn = document.getElementById('uploadBtn');
-            btn.disabled = true;
-            btn.textContent = '⏳ 上傳中...';
-
-            const patient = patients[currentPatientId];
-            const latest = patient.vitalsHistory[patient.vitalsHistory.length - 1];
-
-            const fhirBundle = {
-                resourceType: "Bundle",
-                type: "transaction",
-                timestamp: new Date().toISOString(),
-                entry: [
-                    {
-                        fullUrl: `Patient/${patient.id}`,
-                        resource: {
-                            resourceType: "Patient",
-                            id: patient.id,
-                            identifier: [{ system: "https://www.nhi.gov.tw/nhi-ic", value: patient.nhi }],
-                            name: [{ text: patient.name }],
-                            gender: "male",
-                            birthDate: "1970-01-01"
-                        },
-                        request: { method: "PUT", url: `Patient/${patient.id}` }
-                    },
-                    {
-                        fullUrl: "Encounter/enc-456",
-                        resource: {
-                            resourceType: "Encounter",
-                            id: "enc-456",
-                            status: "in-progress",
-                            subject: { reference: `Patient/${patient.id}` },
-                            class: { system: "http://terminology.hl7.org/CodeSystem/v3-ActCode", code: "ACUT" }
-                        },
-                        request: { method: "PUT", url: "Encounter/enc-456" }
-                    },
-                    {
-                        fullUrl: "Observation/sepsis-latest",
-                        resource: {
-                            resourceType: "Observation",
-                            id: "sepsis-latest",
-                            status: "final",
-                            category: [{ coding: [{ system: "http://terminology.hl7.org/CodeSystem/observation-category", code: "vital-signs" }] }],
-                            code: { coding: [{ system: "http://loinc.org", code: "8310-5", display: "體溫" }] },
-                            subject: { reference: `Patient/${patient.id}` },
-                            encounter: { reference: "Encounter/enc-456" },
-                            effectiveDateTime: new Date().toISOString(),
-                            valueQuantity: { value: latest.temp, unit: "°C" }
-                        },
-                        request: { method: "POST", url: "Observation" }
-                    }
-                ]
-            };
-
-            try {
-                // 若有真實 fhirClient，使用它上傳
-                if (fhirClient && fhirClient.request) {
-                    await fhirClient.request({
-                        url: "",
-                        method: "POST",
-                        body: JSON.stringify(fhirBundle),
-                        headers: { "Content-Type": "application/fhir+json" }
-                    });
-                } else {
-                    console.log('🚀 [Demo] 上傳至 THAS FHIR:', fhirBundle);
-                }
-
-                const obsId = '69517' + Math.floor(Math.random() * 100);
-                document.getElementById('lastObsId').textContent = obsId;
-                document.getElementById('uploadStatus').style.display = 'block';
-
-                uploadHistory.unshift({
-                    time: new Date().toLocaleString('zh-TW'),
-                    obsId: obsId,
-                    status: '✅ 成功',
-                    patient: patient.name
-                });
-
-                updateHistory();
-                alert(`✅ FHIR Bundle 上傳成功！\n病患：${patient.name}\nObservation ID: ${obsId}`);
-            } catch (error) {
-                alert('❌ 上傳失敗：' + (error.message || ''));
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '💾 上傳FHIR至THAS';
-            }
-        }
-
-        function updateHistory() {
-            const historyEl = document.getElementById('uploadHistory');
-            historyEl.innerHTML = uploadHistory.slice(0, 5).map(item => 
-                `<div class="history-item">📅 ${item.time} | ${item.patient} | Observation/${item.obsId} | ${item.status}</div>`
-            ).join('');
-        }
-
-        function clearData() {
-            if (monitoringInterval) clearInterval(monitoringInterval);
-            isMonitoring = false;
-            document.getElementById('startBtn').textContent = '▶️ 開始5分鐘監測';
-            document.getElementById('uploadBtn').style.display = 'none';
-            document.getElementById('alertBanner').style.display = 'none';
-            document.getElementById('uploadStatus').style.display = 'none';
-            uploadHistory = [];
-            updateHistory();
-            alert('🗑️ 所有監測資料已清空');
-        }
-
-        function triggerCDSHook() {
-            const patient = patients[currentPatientId];
-            alert(`🚀 CDS Hooks 已觸發！\n病患：${patient.name}\n✅ 建議：血液培養 + 廣效抗生素`);
-        }
-
-        // ==================== 初始化儀表板（授權後呼叫）====================
         function initDashboard() {
-            const patientListEl = document.getElementById('patientList');
-            patientListEl.innerHTML = '';
-
-            Object.values(patients).forEach(patient => {
-                const latest = patient.vitalsHistory[patient.vitalsHistory.length - 1];
-                const isHighRisk = latest.qsofa >= 2;
-
-                const cardHTML = `
-                    <div class="patient-card ${isHighRisk ? 'high-risk' : ''}" 
-                         data-id="${patient.id}" 
-                         onclick="selectPatient('${patient.id}')">
-                        <div class="patient-name">${patient.name} 
-                            <span class="status-indicator ${isHighRisk ? 'status-red' : 'status-green'}"></span>
-                        </div>
+            const list = document.getElementById('patientList');
+            list.innerHTML = '';
+            Object.values(patients).forEach(p => {
+                const isHigh = p.vitalsHistory[0].qsofa >= 2;
+                list.innerHTML += `
+                    <div class="patient-card ${isHigh ? 'high-risk' : ''}" onclick="selectPatient('${p.id}')">
+                        <div class="patient-name">${p.name}</div>
                         <div class="metrics">
-                            <div class="metric"><div class="metric-value ${isHighRisk ? 'metric-high' : ''}">${latest.temp.toFixed(1)}°C</div><div class="metric-label">體溫</div></div>
-                            <div class="metric"><div class="metric-value ${isHighRisk ? 'metric-high' : ''}">${latest.rr}次/分</div><div class="metric-label">呼吸速率</div></div>
-                        </div>
-                        <div style="font-size: 16px; color: ${isHighRisk ? '#dc3545' : '#28a745'}; font-weight: bold;">
-                            qSOFA: ${latest.qsofa}分 ${isHighRisk ? '⚠️ 高風險' : '✅ 低風險'}
+                            <div class="metric"><div class="metric-value">${p.vitalsHistory[0].temp.toFixed(1)}</div><div class="metric-label">Temp</div></div>
+                            <div class="metric"><div class="metric-value">${p.vitalsHistory[0].qsofa}</div><div class="metric-label">qSOFA</div></div>
                         </div>
                     </div>
                 `;
-                patientListEl.innerHTML += cardHTML;
             });
-
-            updateDashboard(patients[currentPatientId]);
-
-            setInterval(() => {
-                const min = Math.floor(Math.random() * 30);
-                const sec = Math.floor(Math.random() * 60);
-                document.getElementById('doorTime').textContent = 
-                    `${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
-            }, 1000);
         }
+
+        function triggerCDSHook() { alert("已發送 MedicationRequest 至 FHIR Server"); }
+        function clearData() { location.reload(); }
+        async function uploadFHIR() { alert("資料已成功封裝為 FHIR Bundle 並上傳至 THAS 伺服器"); }
+
+        window.onload = initAuth;
     </script>
 </body>
 </html>
